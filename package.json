@@ -1,0 +1,12 @@
+{
+  "name": "grandbruit",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "gulp": "^3.8.10",
+    "gulp-concat-sourcemap": "^1.3.1",
+    "gulp-uglifyjs": "~0.5.0",
+    "gulp-notify": "^2.0.1",
+    "gulp-sass": "^1.3.3"
+  }
+}

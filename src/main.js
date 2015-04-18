@@ -28,7 +28,7 @@ var render = function() {
 	var time = Date.now() * 0.001;
 	renderer.render(scene, camera);
   if (typeof mesh !== 'undefined') {
-    mesh.rotation.y += 0.001;
+    mesh.rotation.y += 0.0007;
   }
 };
 
