@@ -2846,6 +2846,7 @@ var camera = new THREE.PerspectiveCamera(18.5, 960/600, 0.1, 50);
 camera.position.z = 10;
 
 var renderer = new THREE.CanvasRenderer({alpha: true, canvas: document.getElementById('bigbang') });
+renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(960, 600);
 
 var loader = new THREE.JSONLoader(); // init the loader util
@@ -2860,7 +2861,8 @@ loader.load('js/model.js', function (geometry) {
   mesh.visible = false;
   
   var egh = new THREE.EdgesHelper(mesh, 0xEB3A0A, 0.01);
-  egh.material.linewidth = 0.6;
+  
+  egh.material.linewidth = 0.35 * window.devicePixelRatio;
   scene.add(egh);
   
   scene.add(mesh);
