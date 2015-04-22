@@ -2900,7 +2900,7 @@ var render = function() {
   if (typeof starGroup !== 'undefined') {
     starGroup.rotation.y -= 0.002;
   }
-  group.rotation.x = 0.4 - (document.body.scrollTop * 0.0008)
+  group.rotation.x = 0.4 - (document.body.scrollTop * 0.0003)
 	renderer.render(scene, camera);
 };
 
