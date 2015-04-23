@@ -9,6 +9,17 @@
   font-weight: bold;
 }
 
+$beige: #E2DAC7;
+$bleu:  #94A8A8;
+$rouge: #eb3a0a;
+
+::selection      { background-color: rgba($bleu, 0.4); }
+::-moz-selection { background-color: rgba($bleu, 0.4); }
+
+* {
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
 html {
   overflow-x: hidden;
 }
@@ -18,7 +29,12 @@ body {
   width: 960px;
 	margin: 100px auto 0;
   background-color: #392340;
-  color: #E2DAC7;
+  color: $beige;
+}
+
+a {
+  color: $rouge;
+  text-decoration: none;
 }
 
 header {
@@ -36,7 +52,7 @@ p.description {
   font-size: 40px;
   line-height: 53px;
   font-weight: bold;
-  color: #94A8A8;
+  color: $bleu;
   margin: 0 10%;
 }
 
@@ -46,9 +62,68 @@ canvas#bigbang {
 }
 
 section {
-  margin: 0 -9999rem;
-  padding: 3em 9999rem 5em;
-  background: rgba(black, 0.2);
+  
+  &.bigbang {
+    position: relative;
+    
+    div.project {
+      display: none;
+      position: absolute;
+      transform: translateX(-50%);
+      margin-top: -165px;
+      
+      &.visible {
+        display: block;
+      }
+      
+      a {
+        background-color: #301D36;
+        display: block;
+        width: 108px;
+        height: 108px;
+        -webkit-border-radius: 54px;
+        -moz-border-radius:    54px;
+        border-radius:         54px;
+        
+        &:hover {
+          background-color: mix($rouge, #301d36, 80%);
+          
+          span {
+            opacity: 1;
+          }
+        }
+        
+        span {
+          font-weight: bold;
+          position: absolute;
+          width: 200%;
+          top: 25%;
+          left: 115%;
+          opacity: 0;
+          color: $beige;
+        }
+        
+        img {
+          position: relative;
+          display: block;
+          margin: auto;
+        	top: 50%;
+        	transform: translateY(-50%);
+        }
+      }
+      
+      img.tail {
+        display: block;
+        margin: auto;
+      }
+    }
+  }
+  
+  &.project {
+    margin: 0 -9999rem;
+    padding: 3em 9999rem 5em;
+    background: rgba(black, 0.2);
+  }
   
   div.container {
     padding-left: 17%;
@@ -56,9 +131,9 @@ section {
   }
 }
 
-section + section { background: rgba(black, 0.3) }
-section + section + section { background: rgba(black, 0.4) }
-section + section + section + section { background: rgba(black, 0.5) }
+section.project + section.project { background: rgba(black, 0.3) }
+section.project + section.project + section.project { background: rgba(black, 0.4) }
+section.project + section.project + section.project + section.project { background: rgba(black, 0.5) }
 
 footer {
   margin: 9em 0;

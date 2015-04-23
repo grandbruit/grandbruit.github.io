@@ -8,6 +8,8 @@ var scripts = [
   './src/three.min.js', 
   './src/Projector.js',
   './src/CanvasRenderer.js',
+  './src/sprint.js', 
+  './src/smooth-scroll.js', 
   './src/main.js', 
 ];
 

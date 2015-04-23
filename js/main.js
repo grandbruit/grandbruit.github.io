@@ -2841,6 +2841,1852 @@ THREE.CanvasRenderer = function ( parameters ) {
 };
 
 
+/*
+ * Sprint JavaScript Library v0.9.2
+ * http://sprintjs.com
+ *
+ * Copyright (c) 2014, 2015 Benjamin De Cock
+ * Released under the MIT license
+ * http://sprintjs.com/license
+ */
+
+var Sprint;
+
+(function() {
+  "use strict";
+
+  var addEventListeners = function(listeners, el) {
+    var sprintClone = Sprint(el)
+    var events = Object.keys(listeners)
+    var eventsLen = events.length
+
+    for (var i = 0; i < eventsLen; i++) {
+      var event = events[i]
+      var handlers = listeners[event]
+      var handlersLen = handlers.length
+
+      for (var j = 0; j < handlersLen; j++) {
+        sprintClone.on(event, handlers[j])
+      }
+    }
+  }
+
+  var addPx = (function() {
+    var noPx = [
+      "animation-iteration-count",
+      "column-count",
+      "flex-grow",
+      "flex-shrink",
+      "font-weight",
+      "line-height",
+      "opacity",
+      "order",
+      "orphans",
+      "widows",
+      "z-index"
+    ]
+    return function addPx(cssProperty, value) {
+      if (inArray(cssProperty, noPx)) return value
+      var stringValue = typeof value == "string" ? value : value.toString()
+      if (value && !/\D/.test(stringValue)) {
+        stringValue += "px"
+      }
+      return stringValue
+    }
+  }())
+
+  var createDOM = function(HTMLString) {
+    var tmp = document.createElement("div")
+    var tag = /[\w:-]+/.exec(HTMLString)[0]
+    var inMap = wrapMap[tag]
+    var validHTML = HTMLString.trim()
+    if (inMap) {
+      validHTML = inMap.intro + validHTML + inMap.outro
+    }
+    tmp.insertAdjacentHTML("afterbegin", validHTML)
+    var node = tmp.lastChild
+    if (inMap) {
+      var i = inMap.outro.match(/</g).length
+      while (i--) {
+        node = node.lastChild
+      }
+    }
+    // prevent tmp to be node's parentNode
+    tmp.textContent = ""
+    return node
+  }
+
+  var domMethods = {
+    afterbegin: function(el) {
+      this.insertBefore(el, this.firstChild)
+    },
+    afterend: function(el) {
+      var parent = this.parentElement
+      parent && parent.insertBefore(el, this.nextSibling)
+    },
+    beforebegin: function(el) {
+      var parent = this.parentElement
+      parent && parent.insertBefore(el, this)
+    },
+    beforeend: function(el) {
+      this.appendChild(el)
+    }
+  }
+
+  var duplicateEventListeners = function(el, clone) {
+    // Element nodes only
+    if (el.nodeType > 1) return
+
+    // Duplicate event listeners for the parent element...
+    var listeners = getEvents(el)
+    listeners && addEventListeners(listeners, clone)
+
+    // ... and its descendants.
+    var descendants = selectElements("*", el)
+    var descendantsLen = descendants.length
+
+    // cloneDescendants is defined later to avoid calling selectElements() if not needed
+    var cloneDescendants
+
+    for (var i = 0; i < descendantsLen; i++) {
+      var listeners = getEvents(descendants[i])
+      if (!listeners) continue
+      if (!cloneDescendants) {
+        cloneDescendants = selectElements("*", clone)
+      }
+      addEventListeners(listeners, cloneDescendants[i])
+    }
+  }
+
+  var findAncestors = function(startAtParent, limitToParent, limitToFirstMatch, selector, context) {
+    var dom = []
+    var self = this
+    this.each(function() {
+      var prt = startAtParent ? this.parentElement : this
+      while (prt) {
+        if (context && context == prt) break
+        if (!selector || self.is(selector, prt)) {
+          dom.push(prt)
+          if (limitToFirstMatch) break
+        }
+        if (limitToParent) break
+        prt = prt.parentElement
+      }
+    })
+    return Sprint(removeDuplicates(dom))
+  }
+
+  var getEventFromNamespace = function(event) {
+    return splitNamespaces(event)[0]
+  }
+
+  var getEvents = function(domElement) {
+    return domElement.sprintEventListeners
+  }
+
+  var getEventsToRemove = function(domElement, event) {
+    /*
+     * Returns an array with the sprintEventListeners events matching potentially
+     * incomplete event names passed to .off().
+     * Example: .off("click.myPlugin") and .off("click.simple") would both remove a
+     * "click.myPlugin.simple" event.
+     */
+    return Object.keys(getEvents(domElement)).filter(function(prop) {
+      return splitNamespaces(event).every(function(name) {
+        return inArray(name, splitNamespaces(prop))
+      })
+    })
+  }
+
+  var getSetDimension = function(obj, prop, value) {
+    // get
+    if (value == null) {
+      var el = obj.get(0)
+      if (!el || el.nodeType > 1) return
+      var capitalizedProp = prop[0].toUpperCase() + prop.substring(1)
+      // dimension of HTML document
+      if (el == document) {
+        var offset = root["offset" + capitalizedProp]
+        var inner = window["inner" + capitalizedProp]
+        return offset > inner ? offset : inner
+      }
+      // dimension of viewport
+      if (el == window) {
+        return window["inner" + capitalizedProp]
+      }
+      // dimension of element
+      return el.getBoundingClientRect()[prop]
+    }
+
+    // set
+    var isFunction = typeof value == "function"
+    var stringValue = isFunction ? "" : addPx(prop, value)
+    return obj.each(function(index) {
+      if (this == document || this == window || this.nodeType > 1) return
+      if (isFunction) {
+        stringValue = addPx(prop, value.call(this, index, Sprint(this)[prop]()))
+      }
+      this.style[prop] = stringValue
+    })
+  }
+
+  var insertHTML = function(position, args) {
+    var argsLen = args.length
+    var contents = args
+
+    // reverse argument list for afterbegin and afterend
+    if (argsLen > 1 && position.indexOf("after") > -1) {
+      contents = []
+      var i = argsLen
+      while (i--) {
+        contents.push(args[i])
+      }
+    }
+
+    for (var i = 0; i < argsLen; i++) {
+      var content = contents[i]
+      if (typeof content == "string" || typeof content == "number") {
+        this.each(function() {
+          this.insertAdjacentHTML(position, content)
+        })
+      }
+      else if (typeof content == "function") {
+        this.each(function(index) {
+          var callbackValue = content.call(this, index, this.innerHTML)
+          insertHTML.call(Sprint(this), position, [callbackValue])
+        })
+      }
+      else {
+        var isSprintObj = content instanceof Init
+        var clonedElements = []
+        var elementsToInsert = (function() {
+          if (isSprintObj) {
+            return content.get()
+          }
+          if (Array.isArray(content)) {
+            return sanitize(content, true, true)
+          }
+          // DOM node
+          if (content.nodeType) {
+            return [content]
+          }
+          // getElementsByTagName, getElementsByClassName, querySelectorAll
+          return toArray(content)
+        }())
+        var elementsToInsertLen = elementsToInsert.length
+
+        this.each(function(index) {
+          /*
+           * The fragment serves multiple purposes:
+           * 1) It significantly boosts perf when multiple elements are added.
+           * 2) It avoids the need for elementsToInsert.reverse() for afterbegin and afterend
+           * 3) It removes an element from its original position before adding it back, which is
+           * especially useful for elements not part of the DOM tree. That means it's important even
+           * when elementsToInsertLen == 1.
+           */
+          var fragment = document.createDocumentFragment()
+          for (var i = 0; i < elementsToInsertLen; i++) {
+            var element = elementsToInsert[i]
+            var elementToInsert
+            if (index) {
+              elementToInsert = element.cloneNode(true)
+              duplicateEventListeners(element, elementToInsert)
+            }
+            else {
+              elementToInsert = element
+            }
+            fragment.appendChild(elementToInsert)
+            clonedElements.push(elementToInsert)
+          }
+          domMethods[position].call(this, fragment)
+        })
+
+        if (isSprintObj) {
+          content.dom = clonedElements
+          content.length = clonedElements.length
+        }
+        if (i < argsLen-1) continue
+        return clonedElements
+      }
+    }
+  }
+
+  var inArray = function(el, arr) {
+    var i = arr.length
+    while (i--) {
+      if (arr[i] === el) return true
+    }
+    return false
+  }
+
+  var isNamespaced = function(event) {
+    return /\./.test(event)
+  }
+
+  var manipulateClass = function(method, className, bool) {
+    if (className == null) {
+      if (method == "add") {
+        return this
+      }
+      return this.removeAttr("class")
+    }
+
+    var isString
+    var classNames
+    var classNamesLen
+
+    if (typeof className == "string") {
+      isString = true
+      classNames = className.trim().split(" ")
+      classNamesLen = classNames.length
+    }
+
+    return this.each(function(i, el) {
+      if (this.nodeType > 1) return
+      if (!isString) {
+        // className is a function
+        var callbackValue = className.call(el, i, el.className)
+        if (!callbackValue) return
+        classNames = callbackValue.trim().split(" ")
+        classNamesLen = classNames.length
+      }
+      for (var j = 0; j < classNamesLen; j++) {
+        var name = classNames[j]
+        if (!name) continue
+        bool == null
+          ? el.classList[method](name)
+          : el.classList.toggle(name, bool)
+      }
+    })
+  }
+
+  var matches = (function() {
+    var names = [
+      "mozMatchesSelector",
+      "webkitMatchesSelector",
+      "msMatchesSelector",
+      "matches"
+    ]
+    var i = names.length
+    while (i--) {
+      var name = names[i]
+      if (!Element.prototype[name]) continue
+      return name
+    }
+  }())
+
+  var removeDuplicates = function(arr) {
+    var clean = []
+    var cleanLen = 0
+    var arrLen = arr.length
+
+    for (var i = 0; i < arrLen; i++) {
+      var el = arr[i]
+      var duplicate = false
+
+      for (var j = 0; j < cleanLen; j++) {
+        if (el !== clean[j]) continue
+        duplicate = true
+        break
+      }
+
+      if (duplicate) continue
+      clean[cleanLen++] = el
+    }
+
+    return clean
+  }
+
+  var removeEvent = (function() {
+    var isHandlerShared = function(el, event, registeredHandler) {
+      var similarEventsHandlers = Object.keys(getEvents(el)).filter(function(prop) {
+        return getEventFromNamespace(event) === getEventFromNamespace(prop)
+      }).map(function(ev) {
+        return getEvents(el)[ev]
+      }).reduce(function(a, b) {
+        return a.concat(b)
+      }).filter(function(handler) {
+        return handler === registeredHandler
+      })
+      if (similarEventsHandlers.length < 2) return false
+      return true
+    }
+    var removeListener = function(el, event, namedHandler) {
+      return function(registeredHandler) {
+        if (namedHandler && namedHandler !== registeredHandler) return
+        el.removeEventListener(event, registeredHandler)
+        if (!isNamespaced(event) || isHandlerShared(el, event, registeredHandler)) return
+        el.removeEventListener(getEventFromNamespace(event), registeredHandler)
+      }
+    }
+    var clearRegisteredHandlers = function(registeredHandlers, namedHandler) {
+      return registeredHandlers.filter(function(handler) {
+        return namedHandler && namedHandler !== handler
+      })
+    }
+    return function(el, namedHandler) {
+      return function(event) {
+        getEvents(el)[event].forEach(removeListener(el, event, namedHandler))
+        getEvents(el)[event] = clearRegisteredHandlers(getEvents(el)[event], namedHandler)
+      }
+    }
+  }())
+
+  var removeMatchedEvents = function(el, namedHandler) {
+    return function(event) {
+      getEventsToRemove(el, event).forEach(removeEvent(el, namedHandler))
+    }
+  }
+
+  var root = document.documentElement
+
+  var sanitize = function(arr, flattenObjects, requireDomNodes) {
+    /*
+     * Remove null's from array. Optionally, flatten Sprint objects and convert strings and numbers
+     * to DOM text nodes.
+     */
+    var arrLen = arr.length
+    var i = arrLen
+
+    // Check if arr needs to be sanitized first (significant perf boost for the most common case)
+    while (i--) {
+      // arr needs to be sanitized
+      if ( (!arr[i] && arr[i] !== 0)
+        || (flattenObjects && arr[i] instanceof Init)
+        || (requireDomNodes && (typeof arr[i] == "string" || typeof arr[i] == "number"))
+      ) {
+        var sanitized = []
+        for (var j = 0; j < arrLen; j++) {
+          var el = arr[j]
+          if (!el && el !== 0) continue
+          if (flattenObjects && el instanceof Init) {
+            for (var k = 0; k < el.length; k++) {
+              sanitized.push(el.get(k))
+            }
+            continue
+          }
+          if (requireDomNodes && (typeof el == "string" || typeof el == "number")) {
+            sanitized.push(document.createTextNode(el))
+            continue
+          }
+          sanitized.push(el)
+        }
+        return sanitized
+      }
+    }
+
+    // arr didn't need to be sanitized, return it
+    return arr
+  }
+
+  var scroll = (function() {
+    var scrollRoot
+    return function(sprintObj, method, value) {
+      // define scroll root element on first run
+      if (!scrollRoot) {
+        var initialScrollPos = root.scrollTop
+        root.scrollTop = initialScrollPos + 1
+        var updatedScrollPos = root.scrollTop
+        root.scrollTop = initialScrollPos
+        scrollRoot = updatedScrollPos > initialScrollPos
+          ? root // spec-compliant browsers (like FF34 and IE11)
+          : document.body // naughty boys (like Chrome 39 and Safari 8)
+      }
+
+      // get scroll position
+      if (value == null) {
+        var el = sprintObj.get(0)
+        if (!el) return
+        if (el == window || el == document) {
+          el = scrollRoot
+        }
+        return el[method]
+      }
+
+      // set scroll position
+      return sprintObj.each(function() {
+        var el = this
+        if (el == window || el == document) {
+          el = scrollRoot
+        }
+        el[method] = value
+      })
+    }
+  }())
+
+  var selectAdjacentSiblings = function(sprintObj, direction, selector, until) {
+    var dom = []
+    var prop = direction + "ElementSibling"
+    sprintObj.each(function() {
+      var el = this
+      while (el = el[prop]) {
+        if (until && sprintObj.is(until, el)) break
+        if (selector && !sprintObj.is(selector, el)) continue
+        dom.push(el)
+      }
+    })
+    return Sprint(removeDuplicates(dom))
+  }
+
+  var selectImmediateAdjacentSibling = function(sprintObj, direction, selector) {
+    var prop = direction + "ElementSibling"
+    return sprintObj.map(function() {
+      var el = this[prop]
+      if (!el || (selector && !sprintObj.is(selector, el))) return
+      return el
+    }, false)
+  }
+
+  var selectElements = function(selector, context) {
+    context = context || document
+    // class, id, tag name or universal selector
+    if (/^[\#.]?[\w-]+$/.test(selector)) {
+      var firstChar = selector[0]
+      if (firstChar == ".") {
+        return toArray(context.getElementsByClassName(selector.slice(1)))
+      }
+      if (firstChar == "#") {
+        var el = context.getElementById(selector.slice(1))
+        return el ? [el] : []
+      }
+      if (selector == "body") {
+        return [document.body]
+      }
+      return toArray(context.getElementsByTagName(selector))
+    }
+    return toArray(context.querySelectorAll(selector))
+  }
+
+  var splitNamespaces = function(event) {
+    return sanitize(event.split("."))
+  }
+
+  var toArray = function(obj) {
+    var arr = []
+    var i = obj.length
+    while (i--) {
+      arr[i] = obj[i]
+    }
+    return arr
+  }
+
+  var wrap = (function() {
+    var callback = function(wrappingElement, variant) {
+      var wrap = Sprint(wrappingElement).clone(true).get(0)
+      var innerWrap = wrap
+      if (!wrap || this.nodeType > 1) return
+      while (innerWrap.firstChild) {
+        innerWrap = innerWrap.firstChild
+      }
+      if (variant == "inner") {
+        while (this.firstChild) {
+          innerWrap.appendChild(this.firstChild)
+        }
+        this.appendChild(wrap)
+      }
+      else {
+        var el = variant == "all" ? this.get(0) : this
+        var prt = el.parentNode
+        var next = el.nextSibling
+        variant == "all"
+          ? this.each(function() { innerWrap.appendChild(this) })
+          : innerWrap.appendChild(el)
+        prt.insertBefore(wrap, next)
+      }
+    }
+    return function(wrappingElement, variant) {
+      if (typeof wrappingElement == "function") {
+        this.each(function(i) {
+          Sprint(this)[variant == "inner" ? "wrapInner" : "wrap"](wrappingElement.call(this, i))
+        })
+      }
+      else {
+        variant == "all"
+          ? callback.call(this, wrappingElement, variant)
+          : this.each(function() { callback.call(this, wrappingElement, variant) })
+      }
+      return this
+    }
+  }())
+
+  var wrapMap = {
+    legend: {
+      intro: "<fieldset>",
+      outro: "</fieldset>"
+    },
+    area: {
+      intro: "<map>",
+      outro: "</map>"
+    },
+    param: {
+      intro: "<object>",
+      outro: "</object>"
+    },
+    thead: {
+      intro: "<table>",
+      outro: "</table>"
+    },
+    tr: {
+      intro: "<table><tbody>",
+      outro: "</tbody></table>"
+    },
+    col: {
+      intro: "<table><tbody></tbody><colgroup>",
+      outro: "</colgroup></table>"
+    },
+    td: {
+      intro: "<table><tbody><tr>",
+      outro: "</tr></tbody></table>"
+    }
+  };
+  // elements needing a construct already defined by other elements
+  ["tbody", "tfoot", "colgroup", "caption"].forEach(function(tag) {
+    wrapMap[tag] = wrapMap.thead
+  })
+  wrapMap.th = wrapMap.td
+
+  // constructor
+
+  var Init = function(selector, context) {
+    if (typeof selector == "string") {
+      // create DOM element
+      if (selector[0] == "<") {
+        this.dom = [createDOM(selector)]
+      }
+      // select DOM elements
+      else {
+        this.dom = context && context instanceof Init
+          ? context.find(selector).get()
+          : selectElements(selector, context)
+      }
+    }
+    else if (Array.isArray(selector)) {
+      this.dom = sanitize(selector)
+    }
+    else if (
+      selector instanceof NodeList ||
+      selector instanceof HTMLCollection
+    ) {
+      this.dom = toArray(selector)
+    }
+    else if (selector instanceof Init) {
+      return selector
+    }
+    else if (typeof selector == "function") {
+      return this.ready(selector)
+    }
+    else {
+      // assume DOM node
+      this.dom = selector ? [selector] : []
+    }
+    this.length = this.dom.length
+  }
+
+  Init.prototype = {
+    add: function(selector) {
+      var dom = this.get()
+      var objToAdd = Sprint(selector)
+      var domToAdd = objToAdd.get()
+      for (var i = 0; i < objToAdd.length; i++) {
+        dom.push(domToAdd[i])
+      }
+      return Sprint(removeDuplicates(dom))
+    },
+    addClass: function(className) {
+      return manipulateClass.call(this, "add", className)
+    },
+    after: function() {
+      insertHTML.call(this, "afterend", arguments)
+      return this
+    },
+    append: function() {
+      insertHTML.call(this, "beforeend", arguments)
+      return this
+    },
+    appendTo: function(target) {
+      return Sprint(insertHTML.call(Sprint(target), "beforeend", [this]))
+    },
+    attr: function(name, value) {
+      var isFunc = typeof value == "function"
+      if (typeof value == "string" || typeof value == "number" || isFunc) {
+        return this.each(function(i) {
+          if (this.nodeType > 1) return
+          this.setAttribute(
+            name, isFunc ? value.call(this, i, this.getAttribute(name)) : value
+          )
+        })
+      }
+      if (typeof name == "object") {
+        var attrNames = Object.keys(name)
+        var attrNamesLen = attrNames.length
+        return this.each(function() {
+          if (this.nodeType > 1) return
+          for (var i = 0; i < attrNamesLen; i++) {
+            var attribute = attrNames[i]
+            this.setAttribute(attribute, name[attribute])
+          }
+        })
+      }
+      var el = this.get(0)
+      if (!el || el.nodeType > 1) return
+      var attrValue = el.getAttribute(name)
+      if (attrValue == null) {
+        return undefined
+      }
+      if (!attrValue) {
+        return name
+      }
+      return attrValue
+    },
+    before: function() {
+      insertHTML.call(this, "beforebegin", arguments)
+      return this
+    },
+    children: function(selector) {
+      var dom = []
+      var self = this
+      this.each(function() {
+        if (this.nodeType > 1) return
+        var nodes = this.children
+        var nodesLen = nodes.length
+        for (var i = 0; i < nodesLen; i++) {
+          var node = nodes[i]
+          if (!selector || self.is(selector, node)) {
+            dom.push(node)
+          }
+        }
+      })
+      return Sprint(dom)
+    },
+    clone: function(withEvents) {
+      return this.map(function() {
+        if (!this) return
+        var clone = this.cloneNode(true)
+        withEvents && duplicateEventListeners(this, clone)
+        return clone
+      }, false)
+    },
+    closest: function(selector, context) {
+      return findAncestors.call(this, false, false, true, selector, context)
+    },
+    css: function(property, value) {
+      var valueType = typeof value
+      var isString = valueType == "string"
+
+      // set
+      if (isString || valueType == "number") {
+        var isRelativeValue = isString && /=/.test(value)
+        if (isRelativeValue) {
+          var relativeValue = parseInt(value[0] + value.slice(2))
+        }
+        return this.each(function() {
+          if (this.nodeType > 1) return
+          if (isRelativeValue) {
+            var current = parseInt(getComputedStyle(this).getPropertyValue(property))
+            var result = current + relativeValue
+          }
+          this.style[property] = addPx(property, isRelativeValue ? result : value)
+        })
+      }
+      // set
+      if (valueType == "function") {
+        return this.each(function(index) {
+          if (this.nodeType > 1) return
+          var oldValue = getComputedStyle(this).getPropertyValue(property)
+          this.style[property] = value.call(this, index, oldValue)
+        })
+      }
+      // read
+      if (typeof property == "string") {
+        var el = this.get(0)
+        if (!el || el.nodeType > 1) return
+        return getComputedStyle(el).getPropertyValue(property)
+      }
+      // read
+      if (Array.isArray(property)) {
+        var el = this.get(0)
+        if (!el || el.nodeType > 1) return
+        var o = {}
+        var styles = getComputedStyle(el)
+        var propertyLen = property.length
+        for (var i = 0; i < propertyLen; i++) {
+          var prop = property[i]
+          o[prop] = styles.getPropertyValue(prop)
+        }
+        return o
+      }
+      // set
+      var properties = Object.keys(property)
+      var propertiesLen = properties.length
+      return this.each(function() {
+        if (this.nodeType > 1) return
+        for (var i = 0; i < propertiesLen; i++) {
+          var prop = properties[i]
+          this.style[prop] = addPx(prop, property[prop])
+        }
+      })
+    },
+    detach: function() {
+      return this.map(function() {
+        var parent = this.parentElement
+        if (!parent) return
+        parent.removeChild(this)
+        return this
+      }, false)
+    },
+    each: function(callback) {
+      // callback(index, element) where element == this
+      var dom = this.dom
+      var len = this.length
+      for (var i = 0; i < len; i++) {
+        var node = dom[i]
+        callback.call(node, i, node)
+      }
+      return this
+    },
+    empty: function() {
+      return this.each(function() {
+        this.innerHTML = ""
+      })
+    },
+    eq: function(index) {
+      return Sprint(this.get(index))
+    },
+    filter: function(selector) {
+      var isFunc = typeof selector == "function"
+      var self = this
+      return this.map(function(i) {
+        if ( this.nodeType > 1
+          || (!isFunc && !self.is(selector, this))
+          || (isFunc && !selector.call(this, i, this))
+        ) return
+        return this
+      }, false)
+    },
+    find: function(selector) {
+      // .find(selector)
+      if (typeof selector == "string") {
+        var dom = []
+        this.each(function() {
+          if (this.nodeType > 1) return
+          var elements = selectElements(selector, this)
+          var elementsLen = elements.length
+          for (var i = 0; i < elementsLen; i++) {
+            dom.push(elements[i])
+          }
+        })
+        return Sprint(removeDuplicates(dom))
+      }
+
+      // .find(element)
+      var elementsToFind = selector.nodeType ? [selector] : selector.get()
+      var elementsToFindLen = elementsToFind.length
+      var elementsFound = []
+      var elementsFoundLen = 0
+
+      for (var i = 0; i < this.length; i++) {
+        var el = this.get(i)
+        if (el.nodeType > 1) continue
+        // check if each element in `this` contains the elements to find
+        for (var j = 0; j < elementsToFindLen; j++) {
+          var elementToFind = elementsToFind[j]
+          if (!el.contains(elementToFind)) continue
+          elementsFound[elementsFoundLen++] = elementToFind
+          if (elementsFoundLen < elementsToFindLen) continue
+          // everything has been found, return results
+          return Sprint(elementsFound)
+        }
+      }
+
+      // some elements in elementsToFind weren't descendants of `this`
+      return Sprint(elementsFound)
+    },
+    first: function() {
+      return this.eq(0)
+    },
+    get: function(index) {
+      if (index == null) {
+        return this.dom
+      }
+      if (index < 0) {
+        index += this.length
+      }
+      return this.dom[index]
+    },
+    has: function(selector) {
+      // .has(selector)
+      if (typeof selector == "string") {
+        return this.map(function() {
+          if (this.nodeType > 1 || !selectElements(selector, this)[0]) return
+          return this
+        }, false)
+      }
+
+      // .has(contained)
+      var result = []
+      var i = this.length
+      while (i--) {
+        var el = this.get(i)
+        if (!el.contains(selector)) continue
+        result.push(el)
+        break
+      }
+      return Sprint(result)
+    },
+    hasClass: function(name) {
+      var i = this.length
+      while (i--) {
+        var el = this.get(i)
+        if (el.nodeType > 1) return
+        if (el.classList.contains(name)) {
+          return true
+        }
+      }
+      return false
+    },
+    height: function(value) {
+      return getSetDimension(this, "height", value)
+    },
+    html: function(htmlString) {
+      if (htmlString == null) {
+        var el = this.get(0)
+        if (!el) return
+        return el.innerHTML
+      }
+      if (typeof htmlString == "function") {
+        return this.each(function(i) {
+          var content = htmlString.call(this, i, this.innerHTML)
+          Sprint(this).html(content)
+        })
+      }
+      return this.each(function() {
+        this.innerHTML = htmlString
+      })
+    },
+    index: function(el) {
+      if (!this.length) return
+      var toFind
+      var sprintElements
+      if (!el) {
+        toFind = this.get(0)
+        sprintElements = this.first().parent().children()
+      }
+      else if (typeof el == "string") {
+        toFind = this.get(0)
+        sprintElements = Sprint(el)
+      }
+      else {
+        toFind = el instanceof Init ? el.get(0) : el
+        sprintElements = this
+      }
+      var elements = sprintElements.get()
+      var i = elements.length
+      while (i--) {
+        if (elements[i] == toFind) {
+          return i
+        }
+      }
+      return -1
+    },
+    insertAfter: function(target) {
+      Sprint(target).after(this)
+      return this
+    },
+    insertBefore: function(target) {
+      Sprint(target).before(this)
+      return this
+    },
+    is: function(selector, element) {
+      // element is undocumented, internal-use only.
+      // It gives better perfs as it prevents the creation of many objects in internal methods.
+      var set = element ? [element] : this.get()
+      var setLen = set.length
+
+      if (typeof selector == "string") {
+        for (var i = 0; i < setLen; i++) {
+          var el = set[i]
+          if (el.nodeType > 1) continue
+          if (el[matches](selector)) {
+            return true
+          }
+        }
+        return false
+      }
+      if (typeof selector == "object") {
+        // Sprint object or DOM element(s)
+        var obj
+        if (selector instanceof Init) {
+          obj = selector.get()
+        }
+        else {
+          obj = selector.length ? selector : [selector]
+        }
+        var objLen = obj.length
+        for (var i = 0; i < setLen; i++) {
+          for (var j = 0; j < objLen; j++) {
+            if (set[i] === obj[j]) {
+              return true
+            }
+          }
+        }
+        return false
+      }
+      if (typeof selector == "function") {
+        for (var i = 0; i < setLen; i++) {
+          if (selector.call(this, i, this)) {
+            return true
+          }
+        }
+        return false
+      }
+    },
+    last: function() {
+      return this.eq(-1)
+    },
+    map: function(callback, flattenArrays) {
+      /*
+       * flattenArrays (bool, true by default) is for internal usage only (although it might be
+       * interesting to document it publicly).
+       * Many methods rely on map(), thus being able to avoid the unnecessary Array.isArray() check
+       * on each element is a significant perf boost.
+       */
+      if (flattenArrays == null) {
+        flattenArrays = true
+      }
+
+      var dom = this.get()
+      var len = this.length
+      var values = []
+
+      for (var i = 0; i < len; i++) {
+        var el = dom[i]
+        var val = callback.call(el, i, el)
+
+        if (flattenArrays && Array.isArray(val)) {
+          var valLen = val.length
+          for (var j = 0; j < valLen; j++) {
+            values.push(val[j])
+          }
+          continue
+        }
+
+        values.push(val)
+      }
+
+      return Sprint(values)
+    },
+    next: function(selector) {
+      return selectImmediateAdjacentSibling(this, "next", selector)
+    },
+    nextAll: function(selector) {
+      return selectAdjacentSiblings(this, "next", selector)
+    },
+    nextUntil: function(selector, filter) {
+      return selectAdjacentSiblings(this, "next", filter, selector)
+    },
+    not: function(selector) {
+      var isFunc = typeof selector == "function"
+      var self = this
+      return this.map(function(i) {
+        if (isFunc) {
+          if (selector.call(this, i, this)) return
+        }
+        else {
+          if (self.is(selector, this)) return
+        }
+        return this
+      }, false)
+    },
+    off: function(events, handler) {
+      if (typeof events == "object") {
+        Object.keys(events).forEach(function(event) {
+          this.off(event, events[event])
+        }, this)
+        return this
+      }
+      if (events) {
+        events = events.trim().split(" ")
+      }
+      return this.each(function() {
+        if (!getEvents(this)) return
+        if (events) {
+          events.forEach(removeMatchedEvents(this, handler))
+          return
+        }
+        Object.keys(getEvents(this)).forEach(removeEvent(this))
+      })
+    },
+    offset: function(coordinates) {
+      if (!coordinates) {
+        var el = this.get(0)
+        if (!el || el.nodeType > 1) return
+        var pos = el.getBoundingClientRect()
+        return {
+          top: pos.top,
+          left: pos.left
+        }
+      }
+      if (typeof coordinates == "object") {
+        return this.each(function() {
+          if (this.nodeType > 1) return
+          var $this = Sprint(this)
+          $this.css("position") == "static"
+            ? $this.css("position", "relative")
+            : $this.css({
+              top: 0,
+              left: 0
+            })
+          var pos = $this.offset()
+          $this.css({
+            top: coordinates.top - pos.top + "px",
+            left: coordinates.left - pos.left + "px"
+          })
+        })
+      }
+      if (typeof coordinates == "function") {
+        return this.each(function(i) {
+          var $this = Sprint(this)
+          var posObj = coordinates.call(this, i, $this.offset())
+          $this.offset(posObj)
+        })
+      }
+    },
+    offsetParent: function() {
+      var dom = []
+      this.each(function() {
+        if (this.nodeType > 1) return
+        var prt = this
+        while (prt != root) {
+          prt = prt.parentNode
+          var pos = getComputedStyle(prt).getPropertyValue("position")
+          if (!pos) break
+          if (pos != "static") {
+            dom.push(prt)
+            return
+          }
+        }
+        dom.push(root)
+      })
+      return Sprint(dom)
+    },
+    on: function(events, handler) {
+      // .on(events, handler)
+      if (handler) {
+        var eventsArr = events.trim().split(" ")
+
+        return this.each(function() {
+          if (!getEvents(this)) {
+            this.sprintEventListeners = {}
+          }
+          eventsArr.forEach(function(event) {
+            if (!getEvents(this)[event]) {
+              getEvents(this)[event] = []
+            }
+            getEvents(this)[event].push(handler)
+
+            // Ensure we add both the standard event (eg: "click") and the full event
+            // (eg: "click.foo") in order to be able to trigger them manually and programmatically.
+            this.addEventListener(event, handler)
+            if (!isNamespaced(event)) return
+            this.addEventListener(getEventFromNamespace(event), handler)
+          }, this)
+        })
+      }
+
+      // .on({ event: handler })
+      Object.keys(events).forEach(function(event) {
+        this.on(event, events[event])
+      }, this)
+      return this
+    },
+    parent: function(selector) {
+      return findAncestors.call(this, true, true, false, selector)
+    },
+    parents: function(selector) {
+      /* Differences with jQuery:
+       * 1. $("html").parent() and $("html").parents() return an empty set.
+       * 2. The returned set won't be in reverse order.
+       */
+      return findAncestors.call(this, true, false, false, selector)
+    },
+    position: function() {
+      var pos = {
+        first: this.offset(),
+        prt: this.parent().offset()
+      }
+      if (!pos.first) return
+      return {
+        top: pos.first.top - pos.prt.top,
+        left: pos.first.left - pos.prt.left
+      }
+    },
+    prop: function(propertyName, value) {
+      if (typeof propertyName == "object") {
+        var props = Object.keys(propertyName)
+        var propsLen = props.length
+        return this.each(function() {
+          for (var i = 0; i < propsLen; i++) {
+            var prop = props[i]
+            this[prop] = propertyName[prop]
+          }
+        })
+      }
+      if (value == null) {
+        var el = this.get(0)
+        if (!el) return
+        return el[propertyName]
+      }
+      var isFunc = typeof value == "function"
+      return this.each(function(i) {
+        this[propertyName] = isFunc ? value.call(this, i, this[propertyName]) : value
+      })
+    },
+    prepend: function() {
+      insertHTML.call(this, "afterbegin", arguments)
+      return this
+    },
+    prependTo: function(target) {
+      return Sprint(insertHTML.call(Sprint(target), "afterbegin", [this]))
+    },
+    prev: function(selector) {
+      return selectImmediateAdjacentSibling(this, "previous", selector)
+    },
+    prevAll: function(selector) {
+      return selectAdjacentSiblings(this, "previous", selector)
+    },
+    prevUntil: function(selector, filter) {
+      return selectAdjacentSiblings(this, "previous", filter, selector)
+    },
+    ready: function(handler) {
+      this.dom = [document]
+      this.length = 1
+      return this.on("DOMContentLoaded", handler)
+    },
+    remove: function(selector) {
+      var self = this
+      return this.each(function() {
+        var parent = this.parentElement
+        if (!parent) return
+        if (!selector || self.is(selector, this)) {
+          parent.removeChild(this)
+        }
+      })
+    },
+    removeAttr: function(attributeName) {
+      if (attributeName) {
+        var attributes = attributeName.trim().split(" ")
+        var attributesLen = attributes.length
+        this.each(function() {
+          if (this.nodeType > 1) return
+          for (var i = 0; i < attributesLen; i++) {
+            this.removeAttribute(attributes[i])
+          }
+        })
+      }
+      return this
+    },
+    removeClass: function(className) {
+      return manipulateClass.call(this, "remove", className)
+    },
+    removeProp: function(propertyName) {
+      return this.each(function() {
+        this[propertyName] = undefined
+      })
+    },
+    replaceAll: function(target) {
+      Sprint(target).replaceWith(this)
+      return this
+    },
+    replaceWith: function(newContent) {
+      if (typeof newContent == "function") {
+        return this.each(function(i) {
+          Sprint(this).replaceWith(newContent.call(this, i, this))
+        })
+      }
+      return this.before(newContent).remove()
+    },
+    scrollLeft: function(value) {
+      return scroll(this, "scrollLeft", value)
+    },
+    scrollTop: function(value) {
+      return scroll(this, "scrollTop", value)
+    },
+    siblings: function(selector) {
+      var siblings = []
+      var self = this
+      this.each(function(i, el) {
+        Sprint(this).parent().children().each(function() {
+          if (this == el || (selector && !self.is(selector, this))) return
+          siblings.push(this)
+        })
+      })
+      return Sprint(siblings)
+    },
+    size: function() {
+      return this.length
+    },
+    slice: function(start, end) {
+      var dom = this.get()
+      var range = []
+      var i = start >= 0 ? start : start + this.length
+      var l = this.length
+      if (end < 0) {
+        l += end
+      }
+      else if (end >= 0) {
+        l = end > this.length ? this.length : end
+      }
+      for (; i < l; i++) {
+        range.push(dom[i])
+      }
+      return Sprint(range)
+    },
+    text: function(content) {
+      if (content == null) {
+        var textContents = []
+        this.each(function() {
+          textContents.push(this.textContent)
+        })
+        return textContents.join("")
+      }
+      var isFunc = typeof content == "function"
+      return this.each(function(i) {
+        this.textContent = isFunc ? content.call(this, i, this.textContent) : content
+      })
+    },
+    toggleClass: function(className, bool) {
+      return manipulateClass.call(this, "toggle", className, bool)
+    },
+    trigger: function(event) {
+      // IE polyfill
+      if (!window.CustomEvent || typeof window.CustomEvent !== "function") {
+        var CustomEvent = function(event, params) {
+          var evt
+          params = params || {
+            bubbles: false,
+            cancelable: false,
+            detail: undefined
+          }
+          evt = document.createEvent("CustomEvent")
+          evt.initCustomEvent(event, params.bubbles, params.cancelable, params.detail)
+          return evt
+        }
+        CustomEvent.prototype = window.Event.prototype
+        window.CustomEvent = CustomEvent
+      }
+      return this.each(function() {
+        getEventsToRemove(this, event).forEach(function(matchedEvent) {
+          this.dispatchEvent(new CustomEvent(matchedEvent, {
+            bubbles: true,
+            cancelable: true
+          }))
+        }, this)
+      })
+    },
+    unwrap: function() {
+      this.parent().each(function() {
+        if (this == document.body || this == root) return
+        Sprint(this).replaceWith(this.childNodes)
+      })
+      return this
+    },
+    val: function(value) {
+      if (value == null) {
+        var el = this.get(0)
+        if (!el) return
+        if (el.multiple) {
+          var values = []
+          this.first().children(":checked").each(function() {
+            values.push(this.value)
+          })
+          return values
+        }
+        return el.value
+      }
+      if (Array.isArray(value)) {
+        var self = this
+        return this.each(function() {
+          if (this.multiple) {
+            self.children().each(function() {
+              this.selected = inArray(this.value, value)
+            })
+            return
+          }
+          this.checked = inArray(this.value, value)
+        })
+      }
+      if (typeof value == "function") {
+        return this.each(function(i) {
+          Sprint(this).val(value.call(this, i, this.value))
+        })
+      }
+      return this.each(function() {
+        this.value = value
+      })
+    },
+    width: function(value) {
+      return getSetDimension(this, "width", value)
+    },
+    wrap: function(wrappingElement) {
+      return wrap.call(this, wrappingElement)
+    },
+    wrapAll: function(wrappingElement) {
+      return wrap.call(this, wrappingElement, "all")
+    },
+    wrapInner: function(wrappingElement) {
+      return wrap.call(this, wrappingElement, "inner")
+    }
+  }
+
+  // public
+
+  Sprint = function(selector, context) {
+    return new Init(selector, context)
+  }
+
+  if (window.$ == null) {
+    window.$ = Sprint
+  }
+}());
+
+
+/**
+ * smooth-scroll v5.3.6
+ * Animate scrolling to anchor links, by Chris Ferdinandi.
+ * http://github.com/cferdinandi/smooth-scroll
+ * 
+ * Free to use under the MIT License.
+ * http://gomakethings.com/mit/
+ */
+
+(function (root, factory) {
+	if ( typeof define === 'function' && define.amd ) {
+		define([], factory(root));
+	} else if ( typeof exports === 'object' ) {
+		module.exports = factory(root);
+	} else {
+		root.smoothScroll = factory(root);
+	}
+})(this, function (root) {
+
+	'use strict';
+
+	//
+	// Variables
+	//
+
+	var smoothScroll = {}; // Object for public APIs
+	var supports = !!document.querySelector && !!root.addEventListener; // Feature test
+	var settings, eventTimeout, fixedHeader, headerHeight;
+
+	// Default settings
+	var defaults = {
+		speed: 500,
+		easing: 'easeInOutCubic',
+		offset: 0,
+		updateURL: true,
+		callbackBefore: function () {},
+		callbackAfter: function () {}
+	};
+
+
+	//
+	// Methods
+	//
+
+	/**
+	 * A simple forEach() implementation for Arrays, Objects and NodeLists
+	 * @private
+	 * @param {Array|Object|NodeList} collection Collection of items to iterate
+	 * @param {Function} callback Callback function for each iteration
+	 * @param {Array|Object|NodeList} scope Object/NodeList/Array that forEach is iterating over (aka `this`)
+	 */
+	var forEach = function (collection, callback, scope) {
+		if (Object.prototype.toString.call(collection) === '[object Object]') {
+			for (var prop in collection) {
+				if (Object.prototype.hasOwnProperty.call(collection, prop)) {
+					callback.call(scope, collection[prop], prop, collection);
+				}
+			}
+		} else {
+			for (var i = 0, len = collection.length; i < len; i++) {
+				callback.call(scope, collection[i], i, collection);
+			}
+		}
+	};
+
+	/**
+	 * Merge defaults with user options
+	 * @private
+	 * @param {Object} defaults Default settings
+	 * @param {Object} options User options
+	 * @returns {Object} Merged values of defaults and options
+	 */
+	var extend = function ( defaults, options ) {
+		var extended = {};
+		forEach(defaults, function (value, prop) {
+			extended[prop] = defaults[prop];
+		});
+		forEach(options, function (value, prop) {
+			extended[prop] = options[prop];
+		});
+		return extended;
+	};
+
+	/**
+	 * Get the closest matching element up the DOM tree
+	 * @param {Element} elem Starting element
+	 * @param {String} selector Selector to match against (class, ID, or data attribute)
+	 * @return {Boolean|Element} Returns false if not match found
+	 */
+	var getClosest = function (elem, selector) {
+		var firstChar = selector.charAt(0);
+		for ( ; elem && elem !== document; elem = elem.parentNode ) {
+			if ( firstChar === '.' ) {
+				if ( elem.classList.contains( selector.substr(1) ) ) {
+					return elem;
+				}
+			} else if ( firstChar === '#' ) {
+				if ( elem.id === selector.substr(1) ) {
+					return elem;
+				}
+			} else if ( firstChar === '[' ) {
+				if ( elem.hasAttribute( selector.substr(1, selector.length - 2) ) ) {
+					return elem;
+				}
+			}
+		}
+		return false;
+	};
+
+	/**
+	 * Get the height of an element
+	 * @private
+	 * @param  {Node]} elem The element
+	 * @return {Number}     The element's height
+	 */
+	var getHeight = function (elem) {
+		return Math.max( elem.scrollHeight, elem.offsetHeight, elem.clientHeight );
+	};
+
+	/**
+	 * Escape special characters for use with querySelector
+	 * @private
+	 * @param {String} id The anchor ID to escape
+	 * @author Mathias Bynens
+	 * @link https://github.com/mathiasbynens/CSS.escape
+	 */
+	var escapeCharacters = function ( id ) {
+		var string = String(id);
+		var length = string.length;
+		var index = -1;
+		var codeUnit;
+		var result = '';
+		var firstCodeUnit = string.charCodeAt(0);
+		while (++index < length) {
+			codeUnit = string.charCodeAt(index);
+			// Note: there’s no need to special-case astral symbols, surrogate
+			// pairs, or lone surrogates.
+
+			// If the character is NULL (U+0000), then throw an
+			// `InvalidCharacterError` exception and terminate these steps.
+			if (codeUnit === 0x0000) {
+				throw new InvalidCharacterError(
+					'Invalid character: the input contains U+0000.'
+				);
+			}
+
+			if (
+				// If the character is in the range [\1-\1F] (U+0001 to U+001F) or is
+				// U+007F, […]
+				(codeUnit >= 0x0001 && codeUnit <= 0x001F) || codeUnit == 0x007F ||
+				// If the character is the first character and is in the range [0-9]
+				// (U+0030 to U+0039), […]
+				(index === 0 && codeUnit >= 0x0030 && codeUnit <= 0x0039) ||
+				// If the character is the second character and is in the range [0-9]
+				// (U+0030 to U+0039) and the first character is a `-` (U+002D), […]
+				(
+					index === 1 &&
+					codeUnit >= 0x0030 && codeUnit <= 0x0039 &&
+					firstCodeUnit === 0x002D
+				)
+			) {
+				// http://dev.w3.org/csswg/cssom/#escape-a-character-as-code-point
+				result += '\\' + codeUnit.toString(16) + ' ';
+				continue;
+			}
+
+			// If the character is not handled by one of the above rules and is
+			// greater than or equal to U+0080, is `-` (U+002D) or `_` (U+005F), or
+			// is in one of the ranges [0-9] (U+0030 to U+0039), [A-Z] (U+0041 to
+			// U+005A), or [a-z] (U+0061 to U+007A), […]
+			if (
+				codeUnit >= 0x0080 ||
+				codeUnit === 0x002D ||
+				codeUnit === 0x005F ||
+				codeUnit >= 0x0030 && codeUnit <= 0x0039 ||
+				codeUnit >= 0x0041 && codeUnit <= 0x005A ||
+				codeUnit >= 0x0061 && codeUnit <= 0x007A
+			) {
+				// the character itself
+				result += string.charAt(index);
+				continue;
+			}
+
+			// Otherwise, the escaped character.
+			// http://dev.w3.org/csswg/cssom/#escape-a-character
+			result += '\\' + string.charAt(index);
+
+		}
+		return result;
+	};
+
+	/**
+	 * Calculate the easing pattern
+	 * @private
+	 * @link https://gist.github.com/gre/1650294
+	 * @param {String} type Easing pattern
+	 * @param {Number} time Time animation should take to complete
+	 * @returns {Number}
+	 */
+	var easingPattern = function ( type, time ) {
+		var pattern;
+		if ( type === 'easeInQuad' ) pattern = time * time; // accelerating from zero velocity
+		if ( type === 'easeOutQuad' ) pattern = time * (2 - time); // decelerating to zero velocity
+		if ( type === 'easeInOutQuad' ) pattern = time < 0.5 ? 2 * time * time : -1 + (4 - 2 * time) * time; // acceleration until halfway, then deceleration
+		if ( type === 'easeInCubic' ) pattern = time * time * time; // accelerating from zero velocity
+		if ( type === 'easeOutCubic' ) pattern = (--time) * time * time + 1; // decelerating to zero velocity
+		if ( type === 'easeInOutCubic' ) pattern = time < 0.5 ? 4 * time * time * time : (time - 1) * (2 * time - 2) * (2 * time - 2) + 1; // acceleration until halfway, then deceleration
+		if ( type === 'easeInQuart' ) pattern = time * time * time * time; // accelerating from zero velocity
+		if ( type === 'easeOutQuart' ) pattern = 1 - (--time) * time * time * time; // decelerating to zero velocity
+		if ( type === 'easeInOutQuart' ) pattern = time < 0.5 ? 8 * time * time * time * time : 1 - 8 * (--time) * time * time * time; // acceleration until halfway, then deceleration
+		if ( type === 'easeInQuint' ) pattern = time * time * time * time * time; // accelerating from zero velocity
+		if ( type === 'easeOutQuint' ) pattern = 1 + (--time) * time * time * time * time; // decelerating to zero velocity
+		if ( type === 'easeInOutQuint' ) pattern = time < 0.5 ? 16 * time * time * time * time * time : 1 + 16 * (--time) * time * time * time * time; // acceleration until halfway, then deceleration
+		return pattern || time; // no easing, no acceleration
+	};
+
+	/**
+	 * Calculate how far to scroll
+	 * @private
+	 * @param {Element} anchor The anchor element to scroll to
+	 * @param {Number} headerHeight Height of a fixed header, if any
+	 * @param {Number} offset Number of pixels by which to offset scroll
+	 * @returns {Number}
+	 */
+	var getEndLocation = function ( anchor, headerHeight, offset ) {
+		var location = 0;
+		if (anchor.offsetParent) {
+			do {
+				location += anchor.offsetTop;
+				anchor = anchor.offsetParent;
+			} while (anchor);
+		}
+		location = location - headerHeight - offset;
+		return location >= 0 ? location : 0;
+	};
+
+	/**
+	 * Determine the document's height
+	 * @private
+	 * @returns {Number}
+	 */
+	var getDocumentHeight = function () {
+		return Math.max(
+			document.body.scrollHeight, document.documentElement.scrollHeight,
+			document.body.offsetHeight, document.documentElement.offsetHeight,
+			document.body.clientHeight, document.documentElement.clientHeight
+		);
+	};
+
+	/**
+	 * Convert data-options attribute into an object of key/value pairs
+	 * @private
+	 * @param {String} options Link-specific options as a data attribute string
+	 * @returns {Object}
+	 */
+	var getDataOptions = function ( options ) {
+		return !options || !(typeof JSON === 'object' && typeof JSON.parse === 'function') ? {} : JSON.parse( options );
+	};
+
+	/**
+	 * Update the URL
+	 * @private
+	 * @param {Element} anchor The element to scroll to
+	 * @param {Boolean} url Whether or not to update the URL history
+	 */
+	var updateUrl = function ( anchor, url ) {
+		if ( history.pushState && (url || url === 'true') ) {
+			history.pushState( null, null, [root.location.protocol, '//', root.location.host, root.location.pathname, root.location.search, anchor].join('') );
+		}
+	};
+
+	var getHeaderHeight = function ( header ) {
+		return header === null ? 0 : ( getHeight( header ) + header.offsetTop );
+	};
+
+	/**
+	 * Start/stop the scrolling animation
+	 * @public
+	 * @param {Element} toggle The element that toggled the scroll event
+	 * @param {Element} anchor The element to scroll to
+	 * @param {Object} options
+	 */
+	smoothScroll.animateScroll = function ( toggle, anchor, options ) {
+
+		// Options and overrides
+		var settings = extend( settings || defaults, options || {} );  // Merge user options with defaults
+		var overrides = getDataOptions( toggle ? toggle.getAttribute('data-options') : null );
+		settings = extend( settings, overrides );
+		anchor = '#' + escapeCharacters(anchor.substr(1)); // Escape special characters and leading numbers
+
+		// Selectors and variables
+		var anchorElem = anchor === '#' ? document.documentElement : document.querySelector(anchor);
+		var startLocation = root.pageYOffset; // Current location on the page
+		if ( !fixedHeader ) { fixedHeader = document.querySelector('[data-scroll-header]'); }  // Get the fixed header if not already set
+		if ( !headerHeight ) { headerHeight = getHeaderHeight( fixedHeader ); } // Get the height of a fixed header if one exists and not already set
+		var endLocation = getEndLocation( anchorElem, headerHeight, parseInt(settings.offset, 10) ); // Scroll to location
+		var animationInterval; // interval timer
+		var distance = endLocation - startLocation; // distance to travel
+		var documentHeight = getDocumentHeight();
+		var timeLapsed = 0;
+		var percentage, position;
+
+		// Update URL
+		updateUrl(anchor, settings.updateURL);
+
+		/**
+		 * Stop the scroll animation when it reaches its target (or the bottom/top of page)
+		 * @private
+		 * @param {Number} position Current position on the page
+		 * @param {Number} endLocation Scroll to location
+		 * @param {Number} animationInterval How much to scroll on this loop
+		 */
+		var stopAnimateScroll = function (position, endLocation, animationInterval) {
+			var currentLocation = root.pageYOffset;
+			if ( position == endLocation || currentLocation == endLocation || ( (root.innerHeight + currentLocation) >= documentHeight ) ) {
+				clearInterval(animationInterval);
+				anchorElem.focus();
+				settings.callbackAfter( toggle, anchor ); // Run callbacks after animation complete
+			}
+		};
+
+		/**
+		 * Loop scrolling animation
+		 * @private
+		 */
+		var loopAnimateScroll = function () {
+			timeLapsed += 16;
+			percentage = ( timeLapsed / parseInt(settings.speed, 10) );
+			percentage = ( percentage > 1 ) ? 1 : percentage;
+			position = startLocation + ( distance * easingPattern(settings.easing, percentage) );
+			root.scrollTo( 0, Math.floor(position) );
+			stopAnimateScroll(position, endLocation, animationInterval);
+		};
+
+		/**
+		 * Set interval timer
+		 * @private
+		 */
+		var startAnimateScroll = function () {
+			settings.callbackBefore( toggle, anchor ); // Run callbacks before animating scroll
+			animationInterval = setInterval(loopAnimateScroll, 16);
+		};
+
+		/**
+		 * Reset position to fix weird iOS bug
+		 * @link https://github.com/cferdinandi/smooth-scroll/issues/45
+		 */
+		if ( root.pageYOffset === 0 ) {
+			root.scrollTo( 0, 0 );
+		}
+
+		// Start scrolling animation
+		startAnimateScroll();
+
+	};
+
+	/**
+	 * If smooth scroll element clicked, animate scroll
+	 * @private
+	 */
+	var eventHandler = function (event) {
+		var toggle = getClosest(event.target, '[data-scroll]');
+		if ( toggle && toggle.tagName.toLowerCase() === 'a' ) {
+			event.preventDefault(); // Prevent default click event
+			smoothScroll.animateScroll( toggle, toggle.hash, settings); // Animate scroll
+		}
+	};
+
+	/**
+	 * On window scroll and resize, only run events at a rate of 15fps for better performance
+	 * @private
+	 * @param  {Function} eventTimeout Timeout function
+	 * @param  {Object} settings
+	 */
+	var eventThrottler = function (event) {
+		if ( !eventTimeout ) {
+			eventTimeout = setTimeout(function() {
+				eventTimeout = null; // Reset timeout
+				headerHeight = getHeaderHeight( fixedHeader ); // Get the height of a fixed header if one exists
+			}, 66);
+		}
+	};
+
+	/**
+	 * Destroy the current initialization.
+	 * @public
+	 */
+	smoothScroll.destroy = function () {
+
+		// If plugin isn't already initialized, stop
+		if ( !settings ) return;
+
+		// Remove event listeners
+		document.removeEventListener( 'click', eventHandler, false );
+		root.removeEventListener( 'resize', eventThrottler, false );
+
+		// Reset varaibles
+		settings = null;
+		eventTimeout = null;
+		fixedHeader = null;
+		headerHeight = null;
+	};
+
+	/**
+	 * Initialize Smooth Scroll
+	 * @public
+	 * @param {Object} options User settings
+	 */
+	smoothScroll.init = function ( options ) {
+
+		// feature test
+		if ( !supports ) return;
+
+		// Destroy any existing initializations
+		smoothScroll.destroy();
+
+		// Selectors and variables
+		settings = extend( defaults, options || {} ); // Merge user options with defaults
+		fixedHeader = document.querySelector('[data-scroll-header]'); // Get the fixed header
+		headerHeight = getHeaderHeight( fixedHeader );
+
+		// When a toggle is clicked, run the click handler
+		document.addEventListener('click', eventHandler, false );
+		if ( fixedHeader ) { root.addEventListener( 'resize', eventThrottler, false ); }
+
+	};
+
+
+	//
+	// Public APIs
+	//
+
+	return smoothScroll;
+
+});
+
+
 var scene = new THREE.Scene();
 var camera = new THREE.PerspectiveCamera(18.5, 960/600, 0.1, 50);
 camera.position.z = 10;
@@ -2861,6 +4707,16 @@ group.rotation.x = 0.4;
 group.position.y = 0.4;
 scene.add(group);
 
+var vector = new THREE.Vector3();
+var projector = new THREE.Projector();
+
+var projects = [
+  { name: 'grandbruit', starIndex: 11 },
+  { name: 'apollo11',   starIndex: 17 },
+  { name: 'detroit',    starIndex: 7  },
+  { name: 'doudou',     starIndex: 85 },
+];
+
 loader.load('js/model.js', function(geometry) {
   mesh = new THREE.Mesh(geometry);
   
@@ -2877,9 +4733,8 @@ loader.load('js/model.js', function(geometry) {
 
 loader.load('js/stars.js', function(geometry) {
   stars = new THREE.Mesh(geometry);
-  
   starGroup = new THREE.Object3D();
-  
+
   for (var i = 0; i < stars.geometry.vertices.length; i++) {
     var star = sprite.clone();
     var scale = Math.max(0.001, Math.random() / 125);
@@ -2887,20 +4742,33 @@ loader.load('js/stars.js', function(geometry) {
     star.position.copy(stars.geometry.vertices[i]);
     starGroup.add(star);
   }
-  
+
   group.add(starGroup);
+  $('div.project').addClass('visible');
 });
 
 var render = function() {
 	requestAnimationFrame(render);
 	var time = Date.now() * 0.001;
+
   if (typeof mesh !== 'undefined') {
     mesh.rotation.y += 0.0007;
   }
+
   if (typeof starGroup !== 'undefined') {
     starGroup.rotation.y -= 0.002;
+    for (var i = 0; i < projects.length; i++) {
+      vector.setFromMatrixPosition(starGroup.children[projects[i]['starIndex']].matrixWorld).project(camera);
+      vector.x = (vector.x * 480) + 480;
+      vector.y = - (vector.y * 300) + 300;
+      var thumbnail = $('#thumb-' + projects[i]['name']);
+      thumbnail.css('left', vector.x + 'px');
+      thumbnail.css('top',  vector.y + 'px');
+    }
   }
-  group.rotation.x = 0.4 - (document.body.scrollTop * 0.0003)
+  
+  group.rotation.x = 0.4 - (document.body.scrollTop * 0.0004)
+  group.position.y = 0.4 + (document.body.scrollTop * 0.0004)
 	renderer.render(scene, camera);
 };
 
@@ -2910,5 +4778,6 @@ window.addEventListener('resize', function () {
 
 render();
 
+smoothScroll.init();
 
 //# sourceMappingURL=main.js.map

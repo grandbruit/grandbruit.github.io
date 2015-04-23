@@ -18,6 +18,16 @@ group.rotation.x = 0.4;
 group.position.y = 0.4;
 scene.add(group);
 
+var vector = new THREE.Vector3();
+var projector = new THREE.Projector();
+
+var projects = [
+  { name: 'grandbruit', starIndex: 11 },
+  { name: 'apollo11',   starIndex: 17 },
+  { name: 'detroit',    starIndex: 7  },
+  { name: 'doudou',     starIndex: 85 },
+];
+
 loader.load('js/model.js', function(geometry) {
   mesh = new THREE.Mesh(geometry);
   
@@ -34,9 +44,8 @@ loader.load('js/model.js', function(geometry) {
 
 loader.load('js/stars.js', function(geometry) {
   stars = new THREE.Mesh(geometry);
-  
   starGroup = new THREE.Object3D();
-  
+
   for (var i = 0; i < stars.geometry.vertices.length; i++) {
     var star = sprite.clone();
     var scale = Math.max(0.001, Math.random() / 125);
@@ -44,20 +53,33 @@ loader.load('js/stars.js', function(geometry) {
     star.position.copy(stars.geometry.vertices[i]);
     starGroup.add(star);
   }
-  
+
   group.add(starGroup);
+  $('div.project').addClass('visible');
 });
 
 var render = function() {
 	requestAnimationFrame(render);
 	var time = Date.now() * 0.001;
+
   if (typeof mesh !== 'undefined') {
     mesh.rotation.y += 0.0007;
   }
+
   if (typeof starGroup !== 'undefined') {
     starGroup.rotation.y -= 0.002;
+    for (var i = 0; i < projects.length; i++) {
+      vector.setFromMatrixPosition(starGroup.children[projects[i]['starIndex']].matrixWorld).project(camera);
+      vector.x = (vector.x * 480) + 480;
+      vector.y = - (vector.y * 300) + 300;
+      var thumbnail = $('#thumb-' + projects[i]['name']);
+      thumbnail.css('left', vector.x + 'px');
+      thumbnail.css('top',  vector.y + 'px');
+    }
   }
-  group.rotation.x = 0.4 - (document.body.scrollTop * 0.0003)
+  
+  group.rotation.x = 0.4 - (document.body.scrollTop * 0.0004)
+  group.position.y = 0.4 + (document.body.scrollTop * 0.0004)
 	renderer.render(scene, camera);
 };
 
@@ -66,3 +88,5 @@ window.addEventListener('resize', function () {
 }, false);
 
 render();
+
+smoothScroll.init();
