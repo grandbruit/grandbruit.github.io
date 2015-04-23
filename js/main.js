@@ -4756,12 +4756,14 @@ var render = function() {
   }
 
   if (typeof starGroup !== 'undefined') {
-    starGroup.rotation.y -= 0.002;
+    starGroup.rotation.y -= 0.0025;
     for (var i = 0; i < projects.length; i++) {
-      vector.setFromMatrixPosition(starGroup.children[projects[i]['starIndex']].matrixWorld).project(camera);
+      var thumbnail = $('#thumb-' + projects[i]['name']);
+      vector.setFromMatrixPosition(starGroup.children[projects[i]['starIndex']].matrixWorld);
+      vector.project(camera);
       vector.x = (vector.x * 480) + 480;
       vector.y = - (vector.y * 300) + 300;
-      var thumbnail = $('#thumb-' + projects[i]['name']);
+      thumbnail.css('z-index', Math.round(vector.y));
       thumbnail.css('left', vector.x + 'px');
       thumbnail.css('top',  vector.y + 'px');
     }
