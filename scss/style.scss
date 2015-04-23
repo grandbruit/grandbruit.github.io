@@ -122,7 +122,26 @@ section {
   &.project {
     margin: 0 -9999rem;
     padding: 3em 9999rem 5em;
-    background: rgba(black, 0.2);
+    background-color: rgba(black, 0.2);
+    
+    div.logo {
+      position: absolute;
+      width: 150px;
+      height: 150px;
+      margin: 10px 0 0 -130px;
+      background-color: rgba(black, 0.2);
+      -webkit-border-radius: 75px;
+      -moz-border-radius:    75px;
+      border-radius:         75px;
+      
+      img {
+        position: relative;
+        display: block;
+        margin: auto;
+      	top: 50%;
+      	transform: translateY(-50%);
+      }
+    }
   }
   
   div.container {
