@@ -83,6 +83,12 @@ var render = function() {
   group.rotation.x = 0.4 - (document.body.scrollTop * 0.0004)
   group.position.y = 0.4 + (document.body.scrollTop * 0.0004)
 	renderer.render(scene, camera);
+  
+  if ($('section#grandbruit').offset()['top'] < 30) {
+    $('#scroll-top').css('opacity', 1);
+  } else {
+    $('#scroll-top').css('opacity', 0);
+  }
 };
 
 window.addEventListener('resize', function () {
