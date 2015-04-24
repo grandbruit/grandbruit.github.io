@@ -4694,7 +4694,14 @@ camera.position.y = -0.2;
 
 var renderer = new THREE.CanvasRenderer({alpha: true, canvas: document.getElementById('bigbang') });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(960, 600);
+
+var width = $('section.bigbang').width();
+var scaleRatio = width / 960;
+renderer.setSize(width, 600 * scaleRatio);
+$('section.bigbang div.pins').css('transform',         'scale(' + scaleRatio + ')');
+$('section.bigbang div.pins').css('-webkit-transform', 'scale(' + scaleRatio + ')');
+$('section.bigbang div.pins').css('transform-origin',         '0 0');
+$('section.bigbang div.pins').css('-webkit-transform-origin', '0 0');
 
 var spriteMaterial = new THREE.SpriteMaterial({ color: 0xE2DAC7 });
 var sprite = new THREE.Sprite(spriteMaterial);
@@ -4744,7 +4751,7 @@ loader.load('js/stars.js', function(geometry) {
   }
 
   group.add(starGroup);
-  $('div.project').addClass('visible');
+  $('div.pin').addClass('visible');
 });
 
 var render = function() {
@@ -4758,7 +4765,7 @@ var render = function() {
   if (typeof starGroup !== 'undefined') {
     starGroup.rotation.y -= 0.0025;
     for (var i = 0; i < projects.length; i++) {
-      var thumbnail = $('#thumb-' + projects[i]['name']);
+      var thumbnail = $('#pin-' + projects[i]['name']);
       vector.setFromMatrixPosition(starGroup.children[projects[i]['starIndex']].matrixWorld);
       vector.project(camera);
       vector.x = (vector.x * 480) + 480;

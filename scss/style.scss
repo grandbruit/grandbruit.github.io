@@ -1,3 +1,23 @@
+$tablet-width: 768px;
+$desktop-width: 1024px;
+
+@mixin tablet {
+  @media (min-width: #{$tablet-width}) and (max-width: #{$desktop-width - 1px}) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: #{$desktop-width}) {
+    @content;
+  }
+}
+
+$beige: #E2DAC7;
+$bleu: #94A8A8;
+$rouge: #eb3a0a;
+$mauve-fonce: #301D36;
+
 @font-face {
   font-family: "Clear Sans";
   src: url("../fonts/ClearSans-Thin.woff") format('woff');
@@ -8,11 +28,6 @@
   src: url("../fonts/ClearSans-Medium.woff") format('woff');
   font-weight: bold;
 }
-
-$beige: #E2DAC7;
-$bleu: #94A8A8;
-$rouge: #eb3a0a;
-$mauve-fonce: #301D36;
 
 ::selection      { background-color: rgba($bleu, 0.3); }
 ::-moz-selection { background-color: rgba($bleu, 0.3); }
@@ -28,10 +43,14 @@ html {
 body {
   font-family: "Clear Sans";
   line-height: 1.6;
-  width: 960px;
+  width: 100%;
 	margin: 0 auto;
   background-color: #392340;
   color: $beige;
+  
+  @include desktop {
+    width: 960px;
+  }
 }
 
 a {
@@ -40,103 +59,150 @@ a {
 }
 
 header {
-  width: 66%;
+  width: 85%;
   margin: 0 auto;
-  padding: 6.5em 0 4em;
+  padding: 3.5em 0 2em;
+  
+  @include desktop {
+    width: 66%;
+    padding: 6.5em 0 4em;
+  }
 }
 
 h1 {
-  font-size: 22px;
+  font-size: 18px;
   margin: 1em 0;
+  
+  @include desktop {
+    font-size: 22px;
+  }
 }
 
 p.description {
-  font-size: 40px;
-  line-height: 53px;
+  margin: 0;
+  font-size: 32px;
+  line-height: 46px;
   font-weight: bold;
   color: $bleu;
-  margin: 0 10%;
+  
+  @include desktop {
+    margin: 0 10%;
+    font-size: 40px;
+    line-height: 53px;
+  }
 }
 
 canvas#bigbang {
-  width: 960px;
-  height: 600px;
+  width: 320px;
+  height: 200px;
+  
+  @include desktop {
+    width: 960px;
+    height: 600px;
+  }
 }
 
 section {
+  width: 85%;
+  margin: 0 auto;
+  
+  @include desktop {
+    width: 100%;
+  }
   
   &.bigbang {
     position: relative;
     
-    div.project {
-      display: none;
+    div.pins {
       position: absolute;
-      transform: translateX(-50%);
-      -webkit-transform: translateX(-50%);
-      margin-top: -152px;
+      top: 0;
       
-      &.visible {
-        display: block;
-      }
-      
-      a {
-        background-color: $mauve-fonce;
-        display: block;
-        width: 108px;
-        height: 108px;
-        -webkit-border-radius: 54px;
-        -moz-border-radius:    54px;
-        border-radius:         54px;
+      div.pin {
+        display: none;
+        position: absolute;
+        transform: translateX(-50%) scale(1.5);
+        -webkit-transform: translateX(-50%) scale(1.5);
+        transform-origin: bottom center;
+        -webkit-transform-origin: bottom center;
+        margin-top: -152px;
         
-        &:hover {
-          background-color: mix($rouge, #301d36, 80%);
+        @include desktop {
+          transform: translateX(-50%);
+          -webkit-transform: translateX(-50%);
+        }
+      
+        &.visible {
+          display: block;
+        }
+      
+        a {
+          background-color: $mauve-fonce;
+          display: block;
+          width: 108px;
+          height: 108px;
+          -webkit-border-radius: 54px;
+          -moz-border-radius:    54px;
+          border-radius:         54px;
+        
+          &:hover {
+            background-color: mix($rouge, #301d36, 80%);
           
+            span {
+              opacity: 1;
+            }
+          }
+        
           span {
-            opacity: 1;
+            font-weight: bold;
+            position: absolute;
+            width: 200%;
+            top: 25%;
+            left: 115%;
+            opacity: 0;
+            color: $beige;
+          }
+        
+          img {
+            position: relative;
+            display: block;
+            margin: auto;
+          	top: 50%;
+          	transform: translateY(-50%);
+            -webkit-transform: translateY(-50%);
           }
         }
-        
-        span {
-          font-weight: bold;
-          position: absolute;
-          width: 200%;
-          top: 25%;
-          left: 115%;
-          opacity: 0;
-          color: $beige;
-        }
-        
-        img {
-          position: relative;
+      
+        img.tail {
           display: block;
           margin: auto;
-        	top: 50%;
-        	transform: translateY(-50%);
-          -webkit-transform: translateY(-50%);
         }
-      }
-      
-      img.tail {
-        display: block;
-        margin: auto;
       }
     }
   }
   
   &.project {
+    width: 100%;
     margin: 0 -9999rem;
     padding: 3em 9999rem 5em;
     background-color: rgba(black, 0.15);
     
     div.logo {
-      position: absolute;
       width: 150px;
       height: 150px;
-      margin: 6px 0 0 -130px;
+      margin: -2em auto -0.75em;
       background-color: rgba(black, 0.15);
       -webkit-border-radius: 75px;
       -moz-border-radius:    75px;
       border-radius:         75px;
+    	transform: scale(0.6);
+      -webkit-transform: scale(0.6);
+      
+      @include desktop {
+        position: absolute;
+        margin: 64px 0 0 -130px;
+      	transform: none;
+        -webkit-transform: none;
+      }
       
       img {
         position: relative;
@@ -149,8 +215,13 @@ section {
     }
     
     div.details {
-      margin: 2em 0 0 10%;
+      margin: 2em 0 0 0;
       color: #8a9a9c;
+      
+      @include desktop {
+        margin-left: 10%;
+      }
+      
       
       div.actions {
         padding-top: 1em;
@@ -177,8 +248,12 @@ section {
   }
   
   div.container {
-    padding-left: 17%;
+    padding: 0 7.5% 0 7.5%;
     margin: 0 auto;
+    
+    @include desktop {
+      padding: 0 0 0 17%;
+    }
   }
 }
 
@@ -188,9 +263,14 @@ section.project + section.project + section.project + section.project { backgrou
 
 footer {
   margin: 0 -9999rem;
-  padding: 12em 9999rem 12em;
+  padding: 8em 9999rem 8em;
   background-color: mix(black, $mauve-fonce, 55%);
   text-align: center;
+  
+  @include desktop {
+    padding-top: 12em;
+    padding-bottom: 12em;
+  }
   
   a {
     font-weight: bold;
@@ -206,14 +286,24 @@ footer {
 a#scroll-top {
   background-color: rgba(black, 0.2);
   position: fixed;
-  top: 60px;
-  right: 60px;
+  top: 15px;
+  right: 15px;
   width: 60px;
   height: 60px;
   opacity: 0;
   -webkit-border-radius: 30px;
   -moz-border-radius:    30px;
   border-radius:         30px;
+	transform: scale(0.75);
+  -webkit-transform: scale(0.75);
+  
+  @include desktop {
+    top: 60px;
+    right: 60px;
+  	transform: none;
+    -webkit-transform: none;
+  }
+  
   
   &:hover {
     background-color: mix($rouge, #301d36, 80%);
