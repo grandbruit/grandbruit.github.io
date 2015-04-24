@@ -72,6 +72,7 @@ section {
       display: none;
       position: absolute;
       transform: translateX(-50%);
+      -webkit-transform: translateX(-50%);
       margin-top: -152px;
       
       &.visible {
@@ -111,6 +112,7 @@ section {
           margin: auto;
         	top: 50%;
         	transform: translateY(-50%);
+          -webkit-transform: translateY(-50%);
         }
       }
       
@@ -142,6 +144,7 @@ section {
         margin: auto;
       	top: 50%;
       	transform: translateY(-50%);
+        -webkit-transform: translateY(-50%);
       }
     }
     
@@ -222,5 +225,6 @@ a#scroll-top {
     margin: auto;
   	top: 50%;
   	transform: translateY(-50%);
+    -webkit-transform: translateY(-50%);
   }
 }
